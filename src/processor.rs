@@ -70,19 +70,20 @@ pub fn add_movie_review(
         program_id,
     );
 
-    //
+    // Make sure the pda passed in by the user is the same as the derived pda
     if pda != *pda_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
     }
 
+    // Make sure the rating falls within the 1 to 5 scale
     if rating > 5 || rating < 1 {
         msg!("Rating cannot be higher than 5");
         return Err(ReviewError::InvalidRating.into());
     }
 
+    // Check that the content of the review does not exceed the 1000 bytes allocated for the account
     let account_len: usize = 1000;
-
     if MovieAccountState::get_account_size(title.clone(), description.clone()) > account_len {
         msg!("Data length is larger than 1000 bytes");
         return Err(ReviewError::InvalidDataLength.into());
@@ -92,7 +93,7 @@ pub fn add_movie_review(
     let rent = Rent::get()?;
     let rent_lamports = rent.minimum_balance(account_len);
 
-    // Create the pda account
+    // Create the pda account for the review
     invoke_signed(
         &system_instruction::create_account(
             initializer.key,
@@ -121,6 +122,7 @@ pub fn add_movie_review(
         try_from_slice_unchecked::<MovieAccountState>(&pda_account.data.borrow()).unwrap();
     msg!("borrowed account data");
 
+    // Make sure the account is not already initialized
     msg!("checking if movie account is already initialized");
     if account_data.is_initialized() {
         msg!("Account already initialized");
@@ -151,6 +153,7 @@ pub fn add_movie_review(
         return Err(ProgramError::InvalidArgument);
     }
 
+    // Create the pda account for the comment counter
     invoke_signed(
         &system_instruction::create_account(
             initializer.key,
@@ -168,6 +171,7 @@ pub fn add_movie_review(
     )?;
     msg!("comment counter created");
 
+    // Deserialize the comment counter account's data
     let mut counter_data =
         try_from_slice_unchecked::<MovieCommentCounter>(&pda_counter.data.borrow()).unwrap();
 
@@ -177,6 +181,7 @@ pub fn add_movie_review(
         return Err(ProgramError::AccountAlreadyInitialized);
     }
 
+    // Update the comment counter account's data and serialize
     counter_data.discriminator = MovieCommentCounter::DISCRIMINATOR.to_string();
     counter_data.counter = 0;
     counter_data.is_initialized = true;
@@ -200,10 +205,12 @@ pub fn update_movie_review(
     let initializer = next_account_info(account_info_iter)?;
     let pda_account = next_account_info(account_info_iter)?;
 
+    // Check that the pda account is owned by our program
     if pda_account.owner != program_id {
         return Err(ProgramError::IllegalOwner);
     }
 
+    // Check that the initializer of the update has also signed the transaction
     if !initializer.is_signer {
         msg!("Missing required signature");
         return Err(ProgramError::MissingRequiredSignature);
@@ -221,6 +228,8 @@ pub fn update_movie_review(
         ],
         program_id,
     );
+
+    //
     if pda != *pda_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ReviewError::InvalidPDA.into());
@@ -287,6 +296,7 @@ pub fn add_comment(
     let rent = Rent::get()?;
     let rent_lamports = rent.minimum_balance(account_len);
 
+    // Derive the comment account pda using the review pda and the counter from the counter account
     let (pda, bump_seed) = Pubkey::find_program_address(
         &[
             pda_review.key.as_ref(),
@@ -299,6 +309,7 @@ pub fn add_comment(
         return Err(ReviewError::InvalidPDA.into());
     }
 
+    // Create the comment account
     invoke_signed(
         &system_instruction::create_account(
             commenter.key,
