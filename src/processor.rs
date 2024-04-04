@@ -50,6 +50,7 @@ pub fn add_movie_review(
     msg!("Rating: {}", rating);
     msg!("Description: {}", description);
 
+    // Iterate through the accounts and separtate them out
     let account_info_iter = &mut accounts.iter();
 
     let initializer = next_account_info(account_info_iter)?;
@@ -57,15 +58,19 @@ pub fn add_movie_review(
     let pda_counter = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
 
+    // Make sure the initializer of a review is a signer on the transaction
     if !initializer.is_signer {
         msg!("Missing required signature");
         return Err(ProgramError::MissingRequiredSignature);
     }
 
+    // Derive a pda pubkey from the user's pubkey, the movie title, and the program id (pubkey)
     let (pda, bump_seed) = Pubkey::find_program_address(
         &[initializer.key.as_ref(), title.as_bytes().as_ref()],
         program_id,
     );
+
+    //
     if pda != *pda_account.key {
         msg!("Invalid seeds for PDA");
         return Err(ProgramError::InvalidArgument);
@@ -83,9 +88,11 @@ pub fn add_movie_review(
         return Err(ReviewError::InvalidDataLength.into());
     }
 
+    // Get the rent needed to create the account
     let rent = Rent::get()?;
     let rent_lamports = rent.minimum_balance(account_len);
 
+    // Create the pda account
     invoke_signed(
         &system_instruction::create_account(
             initializer.key,
@@ -108,6 +115,7 @@ pub fn add_movie_review(
 
     msg!("PDA created: {}", pda);
 
+    // Deserialize the pda's data
     msg!("unpacking state account");
     let mut account_data =
         try_from_slice_unchecked::<MovieAccountState>(&pda_account.data.borrow()).unwrap();
@@ -119,6 +127,7 @@ pub fn add_movie_review(
         return Err(ProgramError::AccountAlreadyInitialized);
     }
 
+    // Set the pda's data to the data in the instruction
     account_data.discriminator = MovieAccountState::DISCRIMINATOR.to_string();
     account_data.title = title;
     account_data.reviewer = *initializer.key;
@@ -126,6 +135,7 @@ pub fn add_movie_review(
     account_data.description = description;
     account_data.is_initialized = true;
 
+    // Serialize the pda's data
     msg!("serializing account");
     account_data.serialize(&mut &mut pda_account.data.borrow_mut()[..])?;
     msg!("state account serialized");

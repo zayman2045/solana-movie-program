@@ -1,6 +1,7 @@
 use borsh::BorshDeserialize;
 use solana_program::program_error::ProgramError;
 
+// Variants that the payload can be converted into
 pub enum MovieInstruction {
     AddMovieReview {
         title: String,
@@ -17,6 +18,7 @@ pub enum MovieInstruction {
     },
 }
 
+// Intermediate type for deserializing movie instructions
 #[derive(BorshDeserialize)]
 struct MovieReviewPayload {
     title: String,
